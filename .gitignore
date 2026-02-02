@@ -1,0 +1,19 @@
+# Environment variables (MUST BE FIRST - contains credentials)
+.env
+.env.local
+.env.*.local
+
+# macOS
+.DS_Store
+
+# Swift build
+/.build
+/Packages
+xcuserdata/
+DerivedData/
+.swiftpm/configuration/registries.json
+.swiftpm/xcode/package.xcworkspace/contents.xcworkspacedata
+
+# Credentials
+.netrc
+postman/huly-mcp.postman_environment.json

@@ -1,0 +1,24 @@
+{
+    "configurations": [
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:huly-mcp}",
+            "name": "Debug huly-mcp",
+            "target": "huly-mcp",
+            "configuration": "debug",
+            "preLaunchTask": "swift: Build Debug huly-mcp"
+        },
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:huly-mcp}",
+            "name": "Release huly-mcp",
+            "target": "huly-mcp",
+            "configuration": "release",
+            "preLaunchTask": "swift: Build Release huly-mcp"
+        }
+    ]
+}

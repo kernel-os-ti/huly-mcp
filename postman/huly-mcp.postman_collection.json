@@ -1,0 +1,772 @@
+{
+    "info": {
+        "name": "Huly MCP",
+        "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+    },
+    "item": [
+        {
+            "name": "Auth",
+            "item": [
+                {
+                    "name": "1. Get Config",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "const config = pm.response.json();",
+                                    "pm.environment.set('ACCOUNTS_URL', config.ACCOUNTS_URL);",
+                                    "console.log('[Auth] ACCOUNTS_URL:', config.ACCOUNTS_URL);"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{HULY_URL}}/config.json",
+                            "host": ["{{HULY_URL}}"],
+                            "path": ["config.json"]
+                        },
+                        "description": "Busca a configuração do servidor e extrai o ACCOUNTS_URL"
+                    }
+                },
+                {
+                    "name": "2. Login",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "const result = pm.response.json();",
+                                    "if (result.result && result.result.token) {",
+                                    "    pm.environment.set('TOKEN', result.result.token);",
+                                    "    console.log('[Auth] Token obtido');",
+                                    "} else {",
+                                    "    console.error('[Auth] Login falhou:', JSON.stringify(result));",
+                                    "}"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            { "key": "Content-Type", "value": "application/json" }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"method\": \"login\",\n    \"params\": {\n        \"email\": \"{{HULY_EMAIL}}\",\n        \"password\": \"{{HULY_PASSWORD}}\"\n    }\n}",
+                            "options": { "language": "json" }
+                        },
+                        "url": {
+                            "raw": "{{ACCOUNTS_URL}}",
+                            "host": ["{{ACCOUNTS_URL}}"]
+                        },
+                        "description": "Autentica com email/senha e obtém o TOKEN inicial"
+                    }
+                },
+                {
+                    "name": "3. Get Social IDs",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "const result = pm.response.json();",
+                                    "if (result.result && result.result.length > 0) {",
+                                    "    pm.environment.set('ACCOUNT_ID', result.result[0]._id);",
+                                    "    console.log('[Auth] ACCOUNT_ID:', result.result[0]._id);",
+                                    "} else {",
+                                    "    console.error('[Auth] getSocialIds falhou:', JSON.stringify(result));",
+                                    "}"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            { "key": "Content-Type", "value": "application/json" },
+                            { "key": "Authorization", "value": "Bearer {{TOKEN}}" }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"method\": \"getSocialIds\",\n    \"params\": {}\n}",
+                            "options": { "language": "json" }
+                        },
+                        "url": {
+                            "raw": "{{ACCOUNTS_URL}}",
+                            "host": ["{{ACCOUNTS_URL}}"]
+                        },
+                        "description": "Obtém o ACCOUNT_ID necessário para transações (criar/atualizar/deletar)"
+                    }
+                },
+                {
+                    "name": "4. Select Workspace",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "const result = pm.response.json();",
+                                    "if (result.result) {",
+                                    "    const ws = result.result;",
+                                    "    const endpoint = ws.endpoint",
+                                    "        .replace('wss://', 'https://')",
+                                    "        .replace('ws://', 'http://')",
+                                    "        .replace(/\\/$/, '');",
+                                    "    pm.environment.set('WS_TOKEN', ws.token);",
+                                    "    pm.environment.set('ENDPOINT', endpoint);",
+                                    "    pm.environment.set('WS_ID', ws.workspace);",
+                                    "    console.log('[Auth] Completo → Endpoint:', endpoint);",
+                                    "} else {",
+                                    "    console.error('[Auth] Falhou:', JSON.stringify(result));",
+                                    "}"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            { "key": "Content-Type", "value": "application/json" },
+                            { "key": "Authorization", "value": "Bearer {{TOKEN}}" }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"method\": \"selectWorkspace\",\n    \"params\": {\n        \"workspaceUrl\": \"{{HULY_WORKSPACE}}\"\n    }\n}",
+                            "options": { "language": "json" }
+                        },
+                        "url": {
+                            "raw": "{{ACCOUNTS_URL}}",
+                            "host": ["{{ACCOUNTS_URL}}"]
+                        },
+                        "description": "Seleciona o workspace e define WS_TOKEN, ENDPOINT e WS_ID"
+                    }
+                }
+            ]
+        },
+        {
+            "name": "Projects",
+            "item": [
+                {
+                    "name": "List Projects",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            { "key": "Content-Type", "value": "application/json" },
+                            { "key": "Authorization", "value": "Bearer {{WS_TOKEN}}" }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"_class\": \"tracker:class:Project\",\n    \"query\": {},\n    \"options\": {\n        \"limit\": 100\n    }\n}",
+                            "options": { "language": "json" }
+                        },
+                        "url": {
+                            "raw": "{{ENDPOINT}}/api/v1/find-all/{{WS_ID}}",
+                            "host": ["{{ENDPOINT}}"],
+                            "path": ["api", "v1", "find-all", "{{WS_ID}}"]
+                        }
+                    }
+                },
+                {
+                    "name": "Get Project",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            { "key": "Content-Type", "value": "application/json" },
+                            { "key": "Authorization", "value": "Bearer {{WS_TOKEN}}" }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"_class\": \"tracker:class:Project\",\n    \"query\": { \"identifier\": \"CLICK\" },\n    \"options\": {\n        \"limit\": 1\n    }\n}",
+                            "options": { "language": "json" }
+                        },
+                        "url": {
+                            "raw": "{{ENDPOINT}}/api/v1/find-all/{{WS_ID}}",
+                            "host": ["{{ENDPOINT}}"],
+                            "path": ["api", "v1", "find-all", "{{WS_ID}}"]
+                        },
+                        "description": "Busca projeto pelo identifier. Mude \"CLICK\" pelo desejado. Copie o _id da resposta para a variável PROJECT_ID."
+                    }
+                }
+            ]
+        },
+        {
+            "name": "Issues",
+            "item": [
+                {
+                    "name": "List Issues",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            { "key": "Content-Type", "value": "application/json" },
+                            { "key": "Authorization", "value": "Bearer {{WS_TOKEN}}" }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"_class\": \"tracker:class:Issue\",\n    \"query\": {},\n    \"options\": {\n        \"limit\": 50,\n        \"sort\": { \"modifiedOn\": -1 }\n    }\n}",
+                            "options": { "language": "json" }
+                        },
+                        "url": {
+                            "raw": "{{ENDPOINT}}/api/v1/find-all/{{WS_ID}}",
+                            "host": ["{{ENDPOINT}}"],
+                            "path": ["api", "v1", "find-all", "{{WS_ID}}"]
+                        }
+                    }
+                },
+                {
+                    "name": "Get Issue",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            { "key": "Content-Type", "value": "application/json" },
+                            { "key": "Authorization", "value": "Bearer {{WS_TOKEN}}" }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"_class\": \"tracker:class:Issue\",\n    \"query\": { \"identifier\": \"CLICK-133\" },\n    \"options\": {\n        \"limit\": 1\n    }\n}",
+                            "options": { "language": "json" }
+                        },
+                        "url": {
+                            "raw": "{{ENDPOINT}}/api/v1/find-all/{{WS_ID}}",
+                            "host": ["{{ENDPOINT}}"],
+                            "path": ["api", "v1", "find-all", "{{WS_ID}}"]
+                        },
+                        "description": "Busca issue pelo identifier. Mude \"CLICK-133\" pelo desejado. Copie o _id da resposta para a variável ISSUE_ID."
+                    }
+                },
+                {
+                    "name": "Create Issue",
+                    "event": [
+                        {
+                            "listen": "prerequest",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "function uuid() {",
+                                    "    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {",
+                                    "        var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);",
+                                    "        return v.toString(16);",
+                                    "    });",
+                                    "}",
+                                    "pm.environment.set('TX_ID', uuid());",
+                                    "pm.environment.set('OBJECT_ID', uuid());",
+                                    "pm.environment.set('NOW', Date.now().toString());",
+                                    "",
+                                    "var endpoint = pm.environment.get('ENDPOINT');",
+                                    "var wsId = pm.environment.get('WS_ID');",
+                                    "var wsToken = pm.environment.get('WS_TOKEN');",
+                                    "var projectId = pm.environment.get('PROJECT_ID');",
+                                    "",
+                                    "pm.sendRequest({",
+                                    "    url: endpoint + '/api/v1/find-all/' + wsId,",
+                                    "    method: 'POST',",
+                                    "    header: [",
+                                    "        { key: 'Authorization', value: 'Bearer ' + wsToken },",
+                                    "        { key: 'Content-Type', value: 'application/json' }",
+                                    "    ],",
+                                    "    body: {",
+                                    "        mode: 'raw',",
+                                    "        raw: JSON.stringify({",
+                                    "            _class: 'tracker:class:Project',",
+                                    "            query: { _id: projectId },",
+                                    "            options: { limit: 1 }",
+                                    "        })",
+                                    "    }",
+                                    "}, function(err, res) {",
+                                    "    if (!err) {",
+                                    "        var project = res.json().value[0];",
+                                    "        var sequence = (project.sequence || 0) + 1;",
+                                    "        pm.environment.set('SEQUENCE', sequence.toString());",
+                                    "        pm.environment.set('PROJECT_IDENTIFIER', project.identifier);",
+                                    "        pm.environment.set('DEFAULT_STATUS', project.defaultIssueStatus || 'tracker:status:Backlog');",
+                                    "        console.log('[create_issue] Sequence:', sequence);",
+                                    "    } else {",
+                                    "        console.error('[create_issue] Erro ao buscar projeto:', err);",
+                                    "    }",
+                                    "});"
+                                ]
+                            }
+                        },
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "if (pm.response.status === 200) {",
+                                    "    pm.environment.set('ISSUE_ID', pm.environment.get('OBJECT_ID'));",
+                                    "    console.log('[create_issue] ISSUE_ID definido:', pm.environment.get('OBJECT_ID'));",
+                                    "}"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            { "key": "Content-Type", "value": "application/json" },
+                            { "key": "Authorization", "value": "Bearer {{WS_TOKEN}}" }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"_id\": \"{{TX_ID}}\",\n    \"_class\": \"core:class:TxCreateDoc\",\n    \"space\": \"core:space:Tx\",\n    \"modifiedOn\": {{NOW}},\n    \"modifiedBy\": \"{{ACCOUNT_ID}}\",\n    \"createdBy\": \"{{ACCOUNT_ID}}\",\n    \"objectId\": \"{{OBJECT_ID}}\",\n    \"objectClass\": \"tracker:class:Issue\",\n    \"objectSpace\": \"{{PROJECT_ID}}\",\n    \"attachedTo\": \"{{PROJECT_ID}}\",\n    \"attachedToClass\": \"tracker:class:Project\",\n    \"collection\": \"issues\",\n    \"attributes\": {\n        \"title\": \"New Issue Title\",\n        \"description\": \"Issue description\",\n        \"status\": \"{{DEFAULT_STATUS}}\",\n        \"priority\": 0,\n        \"number\": {{SEQUENCE}},\n        \"identifier\": \"{{PROJECT_IDENTIFIER}}-{{SEQUENCE}}\",\n        \"kind\": \"tracker:taskTypes:Issue\",\n        \"assignee\": null,\n        \"component\": null,\n        \"estimation\": 0,\n        \"remainingTime\": 0,\n        \"reportedTime\": 0,\n        \"reports\": 0,\n        \"subIssues\": 0,\n        \"parents\": [],\n        \"childInfo\": [],\n        \"dueDate\": null\n    }\n}",
+                            "options": { "language": "json" }
+                        },
+                        "url": {
+                            "raw": "{{ENDPOINT}}/api/v1/tx/{{WS_ID}}",
+                            "host": ["{{ENDPOINT}}"],
+                            "path": ["api", "v1", "tx", "{{WS_ID}}"]
+                        },
+                        "description": "Cria uma issue. Define PROJECT_ID no ambiente antes de rodar (copie o _id do projeto via Get Project). O pre-request busca a sequence automaticamente. Após criação, define ISSUE_ID automaticamente."
+                    }
+                },
+                {
+                    "name": "Update Issue",
+                    "event": [
+                        {
+                            "listen": "prerequest",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "function uuid() {",
+                                    "    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {",
+                                    "        var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);",
+                                    "        return v.toString(16);",
+                                    "    });",
+                                    "}",
+                                    "pm.environment.set('TX_ID', uuid());",
+                                    "pm.environment.set('NOW', Date.now().toString());"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            { "key": "Content-Type", "value": "application/json" },
+                            { "key": "Authorization", "value": "Bearer {{WS_TOKEN}}" }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"_id\": \"{{TX_ID}}\",\n    \"_class\": \"core:class:TxUpdateDoc\",\n    \"space\": \"core:space:Tx\",\n    \"modifiedOn\": {{NOW}},\n    \"modifiedBy\": \"{{ACCOUNT_ID}}\",\n    \"objectId\": \"{{ISSUE_ID}}\",\n    \"objectClass\": \"tracker:class:Issue\",\n    \"objectSpace\": \"core:space:Space\",\n    \"operations\": {\n        \"title\": \"Updated title here\",\n        \"priority\": 1\n    }\n}",
+                            "options": { "language": "json" }
+                        },
+                        "url": {
+                            "raw": "{{ENDPOINT}}/api/v1/tx/{{WS_ID}}",
+                            "host": ["{{ENDPOINT}}"],
+                            "path": ["api", "v1", "tx", "{{WS_ID}}"]
+                        },
+                        "description": "Atualiza uma issue. Usa ISSUE_ID do ambiente. Mude os campos em \"operations\" pelo que quiser atualizar (title, priority, description, status)."
+                    }
+                },
+                {
+                    "name": "Add Comment",
+                    "event": [
+                        {
+                            "listen": "prerequest",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "function uuid() {",
+                                    "    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {",
+                                    "        var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);",
+                                    "        return v.toString(16);",
+                                    "    });",
+                                    "}",
+                                    "pm.environment.set('TX_ID', uuid());",
+                                    "pm.environment.set('OBJECT_ID', uuid());",
+                                    "pm.environment.set('NOW', Date.now().toString());"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            { "key": "Content-Type", "value": "application/json" },
+                            { "key": "Authorization", "value": "Bearer {{WS_TOKEN}}" }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"_id\": \"{{TX_ID}}\",\n    \"_class\": \"core:class:TxCreateDoc\",\n    \"space\": \"core:space:Tx\",\n    \"modifiedOn\": {{NOW}},\n    \"modifiedBy\": \"{{ACCOUNT_ID}}\",\n    \"createdBy\": \"{{ACCOUNT_ID}}\",\n    \"objectId\": \"{{OBJECT_ID}}\",\n    \"objectClass\": \"chunter:class:ChatMessage\",\n    \"objectSpace\": \"core:space:Space\",\n    \"attachedTo\": \"{{ISSUE_ID}}\",\n    \"attachedToClass\": \"tracker:class:Issue\",\n    \"collection\": \"comments\",\n    \"attributes\": {\n        \"message\": \"Comment text here\",\n        \"attachedTo\": \"{{ISSUE_ID}}\",\n        \"attachedToClass\": \"tracker:class:Issue\"\n    }\n}",
+                            "options": { "language": "json" }
+                        },
+                        "url": {
+                            "raw": "{{ENDPOINT}}/api/v1/tx/{{WS_ID}}",
+                            "host": ["{{ENDPOINT}}"],
+                            "path": ["api", "v1", "tx", "{{WS_ID}}"]
+                        },
+                        "description": "Adiciona comentário a uma issue. Usa ISSUE_ID do ambiente. Mude \"Comment text here\" pelo texto desejado."
+                    }
+                },
+                {
+                    "name": "Add Label",
+                    "event": [
+                        {
+                            "listen": "prerequest",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "function uuid() {",
+                                    "    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {",
+                                    "        var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);",
+                                    "        return v.toString(16);",
+                                    "    });",
+                                    "}",
+                                    "pm.environment.set('TX_ID', uuid());",
+                                    "pm.environment.set('OBJECT_ID', uuid());",
+                                    "pm.environment.set('NOW', Date.now().toString());"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            { "key": "Content-Type", "value": "application/json" },
+                            { "key": "Authorization", "value": "Bearer {{WS_TOKEN}}" }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"_id\": \"{{TX_ID}}\",\n    \"_class\": \"core:class:TxCreateDoc\",\n    \"space\": \"core:space:Tx\",\n    \"modifiedOn\": {{NOW}},\n    \"modifiedBy\": \"{{ACCOUNT_ID}}\",\n    \"createdBy\": \"{{ACCOUNT_ID}}\",\n    \"objectId\": \"{{OBJECT_ID}}\",\n    \"objectClass\": \"tags:class:TagElement\",\n    \"objectSpace\": \"core:space:Space\",\n    \"attachedTo\": \"{{ISSUE_ID}}\",\n    \"attachedToClass\": \"tracker:class:Issue\",\n    \"collection\": \"labels\",\n    \"attributes\": {\n        \"title\": \"label-name\",\n        \"color\": 0,\n        \"tag\": \"{{ISSUE_ID}}\"\n    }\n}",
+                            "options": { "language": "json" }
+                        },
+                        "url": {
+                            "raw": "{{ENDPOINT}}/api/v1/tx/{{WS_ID}}",
+                            "host": ["{{ENDPOINT}}"],
+                            "path": ["api", "v1", "tx", "{{WS_ID}}"]
+                        },
+                        "description": "Adiciona label a uma issue. Usa ISSUE_ID do ambiente. Mude \"label-name\" pelo nome da label."
+                    }
+                },
+                {
+                    "name": "Assign Issue",
+                    "event": [
+                        {
+                            "listen": "prerequest",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "function uuid() {",
+                                    "    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {",
+                                    "        var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);",
+                                    "        return v.toString(16);",
+                                    "    });",
+                                    "}",
+                                    "pm.environment.set('TX_ID', uuid());",
+                                    "pm.environment.set('NOW', Date.now().toString());"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            { "key": "Content-Type", "value": "application/json" },
+                            { "key": "Authorization", "value": "Bearer {{WS_TOKEN}}" }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"_id\": \"{{TX_ID}}\",\n    \"_class\": \"core:class:TxUpdateDoc\",\n    \"space\": \"core:space:Tx\",\n    \"modifiedOn\": {{NOW}},\n    \"modifiedBy\": \"{{ACCOUNT_ID}}\",\n    \"objectId\": \"{{ISSUE_ID}}\",\n    \"objectClass\": \"tracker:class:Issue\",\n    \"objectSpace\": \"core:space:Space\",\n    \"operations\": {\n        \"assignee\": \"{{PERSON_ID}}\"\n    }\n}",
+                            "options": { "language": "json" }
+                        },
+                        "url": {
+                            "raw": "{{ENDPOINT}}/api/v1/tx/{{WS_ID}}",
+                            "host": ["{{ENDPOINT}}"],
+                            "path": ["api", "v1", "tx", "{{WS_ID}}"]
+                        },
+                        "description": "Atribui uma issue a uma pessoa. Define ISSUE_ID e PERSON_ID no ambiente (copie os _id via List Issues e List Persons)."
+                    }
+                },
+                {
+                    "name": "Delete Issue",
+                    "event": [
+                        {
+                            "listen": "prerequest",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "function uuid() {",
+                                    "    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {",
+                                    "        var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);",
+                                    "        return v.toString(16);",
+                                    "    });",
+                                    "}",
+                                    "pm.environment.set('TX_ID', uuid());",
+                                    "pm.environment.set('NOW', Date.now().toString());"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            { "key": "Content-Type", "value": "application/json" },
+                            { "key": "Authorization", "value": "Bearer {{WS_TOKEN}}" }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"_id\": \"{{TX_ID}}\",\n    \"_class\": \"core:class:TxRemoveDoc\",\n    \"space\": \"core:space:Tx\",\n    \"modifiedOn\": {{NOW}},\n    \"modifiedBy\": \"{{ACCOUNT_ID}}\",\n    \"objectId\": \"{{ISSUE_ID}}\",\n    \"objectClass\": \"tracker:class:Issue\",\n    \"objectSpace\": \"core:space:Space\"\n}",
+                            "options": { "language": "json" }
+                        },
+                        "url": {
+                            "raw": "{{ENDPOINT}}/api/v1/tx/{{WS_ID}}",
+                            "host": ["{{ENDPOINT}}"],
+                            "path": ["api", "v1", "tx", "{{WS_ID}}"]
+                        },
+                        "description": "Remove uma issue pelo ISSUE_ID do ambiente."
+                    }
+                }
+            ]
+        },
+        {
+            "name": "Documents",
+            "item": [
+                {
+                    "name": "List Teamspaces",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            { "key": "Content-Type", "value": "application/json" },
+                            { "key": "Authorization", "value": "Bearer {{WS_TOKEN}}" }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"_class\": \"document:class:Teamspace\",\n    \"query\": { \"archived\": false },\n    \"options\": {\n        \"limit\": 50\n    }\n}",
+                            "options": { "language": "json" }
+                        },
+                        "url": {
+                            "raw": "{{ENDPOINT}}/api/v1/find-all/{{WS_ID}}",
+                            "host": ["{{ENDPOINT}}"],
+                            "path": ["api", "v1", "find-all", "{{WS_ID}}"]
+                        },
+                        "description": "Lista teamspaces. Copie o _id do teamspace desejado para a variável TEAMSPACE_ID."
+                    }
+                },
+                {
+                    "name": "List Documents",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            { "key": "Content-Type", "value": "application/json" },
+                            { "key": "Authorization", "value": "Bearer {{WS_TOKEN}}" }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"_class\": \"document:class:Document\",\n    \"query\": {},\n    \"options\": {\n        \"limit\": 50,\n        \"sort\": { \"modifiedOn\": -1 }\n    }\n}",
+                            "options": { "language": "json" }
+                        },
+                        "url": {
+                            "raw": "{{ENDPOINT}}/api/v1/find-all/{{WS_ID}}",
+                            "host": ["{{ENDPOINT}}"],
+                            "path": ["api", "v1", "find-all", "{{WS_ID}}"]
+                        }
+                    }
+                },
+                {
+                    "name": "Get Document",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            { "key": "Content-Type", "value": "application/json" },
+                            { "key": "Authorization", "value": "Bearer {{WS_TOKEN}}" }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"_class\": \"document:class:Document\",\n    \"query\": { \"_id\": \"{{DOC_ID}}\" },\n    \"options\": {\n        \"limit\": 1\n    }\n}",
+                            "options": { "language": "json" }
+                        },
+                        "url": {
+                            "raw": "{{ENDPOINT}}/api/v1/find-all/{{WS_ID}}",
+                            "host": ["{{ENDPOINT}}"],
+                            "path": ["api", "v1", "find-all", "{{WS_ID}}"]
+                        },
+                        "description": "Busca documento pelo _id. Define DOC_ID no ambiente (copie de List Documents ou após Create Document)."
+                    }
+                },
+                {
+                    "name": "Get Document Content (Blob)",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            { "key": "Authorization", "value": "Bearer {{WS_TOKEN}}" }
+                        ],
+                        "url": {
+                            "raw": "{{HULY_URL}}/files/{{WS_ID}}/content?file={{BLOB_ID}}&workspace={{WS_ID}}",
+                            "host": ["{{HULY_URL}}"],
+                            "path": ["files", "{{WS_ID}}", "content"],
+                            "query": [
+                                { "key": "file", "value": "{{BLOB_ID}}" },
+                                { "key": "workspace", "value": "{{WS_ID}}" }
+                            ]
+                        },
+                        "description": "Busca o conteúdo real do documento (ProseMirror JSON). Coloque o valor do campo 'content' do documento na variável BLOB_ID."
+                    }
+                },
+                {
+                    "name": "Create Document",
+                    "event": [
+                        {
+                            "listen": "prerequest",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "function uuid() {",
+                                    "    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {",
+                                    "        var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);",
+                                    "        return v.toString(16);",
+                                    "    });",
+                                    "}",
+                                    "pm.environment.set('TX_ID', uuid());",
+                                    "pm.environment.set('OBJECT_ID', uuid());",
+                                    "pm.environment.set('NOW', Date.now().toString());"
+                                ]
+                            }
+                        },
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "if (pm.response.status === 200) {",
+                                    "    pm.environment.set('DOC_ID', pm.environment.get('OBJECT_ID'));",
+                                    "    console.log('[create_document] DOC_ID definido:', pm.environment.get('OBJECT_ID'));",
+                                    "}"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            { "key": "Content-Type", "value": "application/json" },
+                            { "key": "Authorization", "value": "Bearer {{WS_TOKEN}}" }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"_id\": \"{{TX_ID}}\",\n    \"_class\": \"core:class:TxCreateDoc\",\n    \"space\": \"core:space:Tx\",\n    \"modifiedOn\": {{NOW}},\n    \"modifiedBy\": \"{{ACCOUNT_ID}}\",\n    \"createdBy\": \"{{ACCOUNT_ID}}\",\n    \"objectId\": \"{{OBJECT_ID}}\",\n    \"objectClass\": \"document:class:Document\",\n    \"objectSpace\": \"{{TEAMSPACE_ID}}\",\n    \"attributes\": {\n        \"title\": \"Document title here\",\n        \"content\": \"Document content here\",\n        \"attachments\": 0,\n        \"children\": 0\n    }\n}",
+                            "options": { "language": "json" }
+                        },
+                        "url": {
+                            "raw": "{{ENDPOINT}}/api/v1/tx/{{WS_ID}}",
+                            "host": ["{{ENDPOINT}}"],
+                            "path": ["api", "v1", "tx", "{{WS_ID}}"]
+                        },
+                        "description": "Cria um documento. Define TEAMSPACE_ID no ambiente antes de rodar (copie o _id via List Teamspaces). Após criação, define DOC_ID automaticamente."
+                    }
+                },
+                {
+                    "name": "Update Document",
+                    "event": [
+                        {
+                            "listen": "prerequest",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "function uuid() {",
+                                    "    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {",
+                                    "        var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);",
+                                    "        return v.toString(16);",
+                                    "    });",
+                                    "}",
+                                    "pm.environment.set('TX_ID', uuid());",
+                                    "pm.environment.set('NOW', Date.now().toString());"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            { "key": "Content-Type", "value": "application/json" },
+                            { "key": "Authorization", "value": "Bearer {{WS_TOKEN}}" }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"_id\": \"{{TX_ID}}\",\n    \"_class\": \"core:class:TxUpdateDoc\",\n    \"space\": \"core:space:Tx\",\n    \"modifiedOn\": {{NOW}},\n    \"modifiedBy\": \"{{ACCOUNT_ID}}\",\n    \"objectId\": \"{{DOC_ID}}\",\n    \"objectClass\": \"document:class:Document\",\n    \"objectSpace\": \"core:space:Space\",\n    \"operations\": {\n        \"title\": \"Updated document title\"\n    }\n}",
+                            "options": { "language": "json" }
+                        },
+                        "url": {
+                            "raw": "{{ENDPOINT}}/api/v1/tx/{{WS_ID}}",
+                            "host": ["{{ENDPOINT}}"],
+                            "path": ["api", "v1", "tx", "{{WS_ID}}"]
+                        },
+                        "description": "Atualiza um documento. Usa DOC_ID do ambiente. Mude os campos em \"operations\" (title, content)."
+                    }
+                },
+                {
+                    "name": "Delete Document",
+                    "event": [
+                        {
+                            "listen": "prerequest",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "function uuid() {",
+                                    "    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {",
+                                    "        var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);",
+                                    "        return v.toString(16);",
+                                    "    });",
+                                    "}",
+                                    "pm.environment.set('TX_ID', uuid());",
+                                    "pm.environment.set('NOW', Date.now().toString());"
+                                ]
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            { "key": "Content-Type", "value": "application/json" },
+                            { "key": "Authorization", "value": "Bearer {{WS_TOKEN}}" }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"_id\": \"{{TX_ID}}\",\n    \"_class\": \"core:class:TxRemoveDoc\",\n    \"space\": \"core:space:Tx\",\n    \"modifiedOn\": {{NOW}},\n    \"modifiedBy\": \"{{ACCOUNT_ID}}\",\n    \"objectId\": \"{{DOC_ID}}\",\n    \"objectClass\": \"document:class:Document\",\n    \"objectSpace\": \"core:space:Space\"\n}",
+                            "options": { "language": "json" }
+                        },
+                        "url": {
+                            "raw": "{{ENDPOINT}}/api/v1/tx/{{WS_ID}}",
+                            "host": ["{{ENDPOINT}}"],
+                            "path": ["api", "v1", "tx", "{{WS_ID}}"]
+                        },
+                        "description": "Remove um documento pelo DOC_ID do ambiente."
+                    }
+                }
+            ]
+        },
+        {
+            "name": "Persons",
+            "item": [
+                {
+                    "name": "List Persons",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            { "key": "Content-Type", "value": "application/json" },
+                            { "key": "Authorization", "value": "Bearer {{WS_TOKEN}}" }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"_class\": \"contact:class:Person\",\n    \"query\": {},\n    \"options\": {\n        \"limit\": 50\n    }\n}",
+                            "options": { "language": "json" }
+                        },
+                        "url": {
+                            "raw": "{{ENDPOINT}}/api/v1/find-all/{{WS_ID}}",
+                            "host": ["{{ENDPOINT}}"],
+                            "path": ["api", "v1", "find-all", "{{WS_ID}}"]
+                        },
+                        "description": "Lista pessoas. Copie o _id da pessoa desejada para a variável PERSON_ID se quiser usar no Assign Issue."
+                    }
+                }
+            ]
+        }
+    ]
+}
