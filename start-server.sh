@@ -13,12 +13,11 @@ if [ $? -ne 0 ]; then
 fi
 
 echo ""
-echo "🚀 Starting MCP Inspector..."
+echo "🚀 Starting MCP Server..."
 echo "📍 URL: $HULY_URL"
 echo "👤 User: $HULY_EMAIL"
 echo "🏢 Workspace: $HULY_WORKSPACE"
 echo "🐛 Debug logs: ENABLED (set DEBUG=0 to disable)"
 echo ""
 
-mcp-inspector .build/release/huly-mcp 2>&1 | tee /tmp/huly-mcp-debug.log
-
+.build/release/huly-mcp
