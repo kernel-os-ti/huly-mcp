@@ -1,0 +1,18 @@
+{
+  "_id": "test-doc-123",
+  "_class": "core:class:TxCreateDoc",
+  "space": "core:space:Tx",
+  "modifiedOn": 1738536000000,
+  "modifiedBy": "1110107082410557441",
+  "createdBy": "1110107082410557441",
+  "objectId": "test-obj-456",
+  "objectClass": "document:class:Document",
+  "objectSpace": "68af966cbe25d6a2d5740e91",
+  "attributes": {
+    "title": "Test Document",
+    "parent": "document:ids:NoParent",
+    "content": "Test content",
+    "attachments": 0,
+    "children": 0
+  }
+}

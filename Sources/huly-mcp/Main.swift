@@ -10,8 +10,18 @@ import MCP
 @main
 struct HulyMCPServer {
     static func main() async throws {
+        // Bootstrap the logging system to output to stderr
+        LoggingSystem.bootstrap { label in
+            let isDebug = ProcessInfo.processInfo.environment["DEBUG"] != "0"
+            var handler = StreamLogHandler.standardError(label: label)
+            handler.logLevel = isDebug ? .debug : .info
+            return handler
+        }
+        
+        let args = CommandLine.arguments
+        let isDebug = ProcessInfo.processInfo.environment["DEBUG"] != "0" && !args.contains("--no-debug")
         var logger = Logger(label: "com.huly.mcp.server")
-        logger.logLevel = ProcessInfo.processInfo.environment["DEBUG"] == "1" ? .debug : .info
+        logger.logLevel = isDebug ? .debug : .info
 
         logger.info("Starting Huly MCP Server", metadata: ["version": "1.0.0"])
 
@@ -21,7 +31,7 @@ struct HulyMCPServer {
             capabilities: .init(tools: .init())
         )
 
-        let hulyClient = HulyClient()
+        let hulyClient = HulyClientNew()
 
         logger.info("Server initialized successfully")
 
@@ -379,10 +389,16 @@ struct HulyMCPServer {
         // MARK: - Call Tool Handler
 
         await server.withMethodHandler(CallTool.self) { params in
+            var toolLogger = Logger(label: "com.huly.mcp.tool")
+            toolLogger.logLevel = isDebug ? .debug : .info
+            
+            toolLogger.debug("Handling tool call", metadata: ["tool": "\(params.name)"])
             do {
                 switch params.name {
                 case "huly_list_projects":
+                    toolLogger.info("Calling huly_list_projects")
                     let projects = try await hulyClient.listProjects()
+                    toolLogger.debug("Retrieved projects", metadata: ["count": "\(projects.count)"])
                     let json = try formatAsJSON(projects)
                     return CallTool.Result(content: [.text(json)])
 
@@ -498,7 +514,7 @@ struct HulyMCPServer {
                     let teamspace = params.arguments?["teamspace"]?.stringValue
                     let limit = params.arguments?["limit"]?.intValue ?? 50
                     let fetchContent = params.arguments?["fetch_content"]?.boolValue ?? true
-                    let documents = try await hulyClient.listDocuments(teamspaceName: teamspace, limit: limit, fetchContent: fetchContent)
+                    let documents = try await hulyClient.listDocuments(teamspace: teamspace, limit: limit, fetchContent: fetchContent)
                     let json = try formatAsJSON(documents)
                     return CallTool.Result(content: [.text(json)])
 
@@ -529,14 +545,21 @@ struct HulyMCPServer {
                         )
                     }
                     let content = params.arguments?["content"]?.stringValue
-                    let parentId = params.arguments?["parent_id"]?.stringValue
+                    let parentId = params.arguments?["parent_id"]?.stringValue ?? DocumentSpace.noParent
 
-                    let document = try await hulyClient.createDocument(
-                        teamspaceName: teamspace,
+                    // WebSocket write path
+                    let docId = try await hulyClient.createDocumentViaWebSocket(
+                        teamspace: teamspace,
                         title: title,
                         content: content,
-                        parentId: parentId
+                        parent: parentId
                     )
+
+                    // Fetch and return the created document via REST
+                    guard let document = try await hulyClient.getDocument(id: docId, fetchContent: true) else {
+                        throw HulyError.requestFailed("Created document but failed to fetch it")
+                    }
+
                     let json = try formatAsJSON(document)
                     return CallTool.Result(content: [.text("Document created successfully:\n\(json)")])
 
@@ -550,11 +573,24 @@ struct HulyMCPServer {
                     let title = params.arguments?["title"]?.stringValue
                     let content = params.arguments?["content"]?.stringValue
 
-                    let document = try await hulyClient.updateDocument(
-                        id: id,
+                    // Need document to know teamspaceId
+                    guard let existing = try await hulyClient.getDocument(id: id, fetchContent: false) else {
+                        throw HulyError.notFound("Document '\(id)' not found")
+                    }
+
+                    // WebSocket write path
+                    try await hulyClient.updateDocumentViaWebSocket(
+                        documentId: id,
+                        teamspaceId: existing.space,
                         title: title,
                         content: content
                     )
+
+                    // Fetch updated
+                    guard let document = try await hulyClient.getDocument(id: id, fetchContent: true) else {
+                        throw HulyError.requestFailed("Updated document but failed to fetch it")
+                    }
+
                     let json = try formatAsJSON(document)
                     return CallTool.Result(content: [.text("Document updated successfully:\n\(json)")])
 
@@ -576,7 +612,18 @@ struct HulyMCPServer {
                             isError: true
                         )
                     }
-                    try await hulyClient.deleteDocument(id: id)
+
+                    // Need document to know teamspaceId
+                    guard let existing = try await hulyClient.getDocument(id: id, fetchContent: false) else {
+                        throw HulyError.notFound("Document '\(id)' not found")
+                    }
+
+                    // WebSocket write path
+                    try await hulyClient.deleteDocumentViaWebSocket(
+                        documentId: id,
+                        teamspaceId: existing.space
+                    )
+
                     return CallTool.Result(content: [.text("Document deleted successfully")])
 
                 // Collection handlers
@@ -711,6 +758,14 @@ private func mapHulyError(_ error: HulyError, operation: String) -> ErrorRespons
         return .init(code: "URL_ERROR", message: msg, context: ["operation": operation])
     case .invalidResponse:
         return .init(code: "INVALID_RESPONSE", message: "Invalid response from server", context: ["operation": operation])
+    case .notConnected:
+        return .init(code: "WS_NOT_CONNECTED", message: "WebSocket not connected", context: ["operation": operation])
+    case .connectionClosed:
+        return .init(code: "WS_CONNECTION_CLOSED", message: "WebSocket connection was closed", context: ["operation": operation])
+    case .timeout:
+        return .init(code: "TIMEOUT", message: "Operation timed out", context: ["operation": operation])
+    case .serverError(let code, let msg):
+        return .init(code: "SERVER_ERROR_\(code)", message: msg, context: ["operation": operation, "error_code": code])
     }
 }
 
